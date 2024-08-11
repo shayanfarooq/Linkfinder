@@ -1,3 +1,4 @@
+# LiNkFindeR
 Welcome to  Link Extractor! 🌐🔍 This Go script is designed to scan JavaScript files and extract URLs and paths embedded within. It's a powerful tool for developers and security analysts looking to identify external resources referenced in JavaScript code.
 
 Features
