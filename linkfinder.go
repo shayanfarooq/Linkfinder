@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -25,14 +26,10 @@ const (
 
 // Regex patterns to extract URLs and paths from JavaScript files
 const (
-	// Extract relative URLs and paths (simplified)
-	relUrlRegexStr = `(?:url\(['"]?([^'"\)]+)['"]?\))|(?:href\s*=\s*['"]([^'"]+)['"])|(?:src\s*=\s*['"]([^'"]+)['"])`
-	// Extract fetch API URLs
+	relUrlRegexStr   = `(?:url\(['"]?([^'"\)]+)['"]?\))|(?:href\s*=\s*['"]([^'"]+)['"])|(?:src\s*=\s*['"]([^'"]+)['"])`
 	fetchApiRegexStr = `fetch\s*\(\s*['"]([^'"]+)['"]`
-	// Extract absolute URLs
 	absoluteUrlRegexStr = `(?:https?:\/\/[^\s"'()<>]+)`
-	// New regex pattern for additional URL extraction
-	newRegexStr = `(?:"|')(((?:[a-zA-Z]{1,10}://|//)[^"'/]{1,}\.[a-zA-Z]{2,}[^"']{0,})|((?:/|\.\./|\./)[^"'><,;| *()(%%$^/\\\[\]][^"'><,;|()]{1,})|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{1,}\.(?:[a-zA-Z]{1,4}|action)(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{3,}(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-]{1,}\.(?:php|asp|aspx|jsp|json|action|html|js|txt|xml)(?:[\?|#][^"|']{0,}|)))(?:"|')`
+	newRegexStr      = `(?:"|')(((?:[a-zA-Z]{1,10}://|//)[^"'/]{1,}\.[a-zA-Z]{2,}[^"']{0,})|((?:/|\.\./|\./)[^"'><,;| *()(%%$^/\\\[\]][^"'><,;|()]{1,})|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{1,}\.(?:[a-zA-Z]{1,4}|action)(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{3,}(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-]{1,}\.(?:php|asp|aspx|jsp|json|action|html|js|txt|xml)(?:[\?|#][^"|']{0,}|)))(?:"|')`
 )
 
 // Extract URLs from the given content
@@ -107,38 +104,30 @@ func unique(strSlice []string) []string {
 	return list
 }
 
-func main() {
-	var jsURL string
-	if len(os.Args) > 1 {
-		jsURL = os.Args[1]
-	} else {
-		// Read from standard input if no URL is provided
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			jsURL = scanner.Text()
-		}
-		if err := scanner.Err(); err != nil {
-			log.Fatalf("Failed to read from standard input: %v", err)
-		}
-		if jsURL == "" {
-			log.Fatal("No URL provided from standard input.")
-		}
-	}
-
+// Process a single URL
+func processURL(jsURL string) {
 	resp, err := http.Get(jsURL)
 	if err != nil {
-		log.Fatalf("Failed to fetch URL: %v", err)
+		log.Printf("Failed to fetch URL %s: %v", jsURL, err)
+		return
 	}
 	defer resp.Body.Close()
 
 	// Read content
 	var content strings.Builder
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		content.WriteString(scanner.Text() + "\n")
-	}
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("Failed to read response body: %v", err)
+	buf := make([]byte, 1024)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			content.Write(buf[:n])
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Failed to read response body from %s: %v", jsURL, err)
+			return
+		}
 	}
 
 	results := extractFromContent(content.String())
@@ -147,5 +136,18 @@ func main() {
 	fmt.Println(Green + "[URL] " + Reset + jsURL)
 	for _, result := range results {
 		fmt.Println(Cyan + "  " + result + Reset)
+	}
+}
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		jsURL := strings.TrimSpace(scanner.Text())
+		if jsURL != "" {
+			processURL(jsURL)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("Failed to read from standard input: %v", err)
 	}
 }
