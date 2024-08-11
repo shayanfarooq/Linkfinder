@@ -34,12 +34,14 @@ Additional URL patterns with advanced regex
 Output Results:
 
 Prints extracted URLs, with results formatted for clarity.
+
 Example Output
 [URL] https://example.com/script.js
   https://cdn.example.com/resource.js
   /assets/images/logo.png
   https://api.example.com/data
   ../styles/main.css
+
 Requirements
 Go 1.18 or higher
 Contribution
